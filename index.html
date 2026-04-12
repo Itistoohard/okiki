@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="format-detection" content="telephone=no">
+    <title>o kiki's album</title>
+    <style>
+        <!--:root {
+            --bg-img: url('./bgImg/cloudsea.png');
+            /* 📏 3:4 竖图比例优化：宽度收窄，高度增加 */
+            --card-w: 34vw; 
+            --card-h: 45.33vw; /* 34 * 1.333 ≈ 45.33 */
+            --card-max-w: 230px;
+            --card-max-h: 306px;
+        }-->
+		.bg-layer {
+			position: fixed; top: 0; left: 0;
+			width: 100%; height: 100%;
+			z-index: -1; 
+			
+			background-color: blue; 
+			
+			background-image: url('bgImg/cloudsea.png');
+			background-size: cover;
+			background-position: center top; 
+			background-repeat: no-repeat;
+			
+			filter: none !important;
+		}
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        <!--html, body {
+            width: 100%; height: 100%;
+            overflow: hidden; background: #080808;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overscroll-behavior: none; touch-action: none;
+            -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+        }-->
+		html, body {
+			width: 100%; height: 100%;
+			overflow: hidden;
+			background: transparent !important; 
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+			overscroll-behavior: none; touch-action: none;
+			-webkit-tap-highlight-color: transparent;
+		}
+
+        .bg-layer {
+            position: fixed; inset: 0; background: var(--bg-img) no-repeat center/cover;
+            filter: blur(4px) brightness(0.4); transform: scale(1.03); z-index: -1;
+        }
+
+        .music-btn {
+            position: fixed; top: max(18px, env(safe-area-inset-top)); right: 16px;
+            width: 42px; height: 42px; background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 50%; display: grid; place-items: center; cursor: pointer; z-index: 100;
+        }
+        .music-btn::after { content: '🎵'; font-size: 20px; opacity: 0.6; }
+        .music-btn.playing::after { opacity: 1; animation: spin 2s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .nav-btn {
+            position: fixed; top: 50%; transform: translateY(-50%);
+            width: 44px; height: 44px; display: grid; place-items: center;
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 50%; cursor: pointer; z-index: 90;
+            color: rgba(255,255,255,0.35); font-size: 24px; font-weight: bold;
+        }
+        .nav-btn:active { background: rgba(255,255,255,0.15); transform: translateY(-50%) scale(0.92); }
+        .nav-btn.left { left: 10px; }
+        .nav-btn.right { right: 10px; }
+
+        .hint-bar {
+            position: fixed; bottom: max(18px, env(safe-area-inset-bottom));
+            left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.5);
+            font-size: 11px; text-align: center; pointer-events: none; line-height: 1.5; z-index: 80;
+        }
+
+        /* 🖼️ 3D 场景核心 */
+        .scene {
+            /* 👈 视距调大至 1000px，防止竖图过高产生透视畸变 */
+            perspective: 1000px; 
+            width: 100%; height: 100%; display: flex; justify-content: center; align-items: center;
+            transform-style: preserve-3d;
+        }
+        .carousel {
+            position: relative;
+            width: min(var(--card-w), var(--card-max-w));
+            height: min(var(--card-h), var(--card-max-h));
+            transform-style: preserve-3d; will-change: transform;
+        }
+        .img-wrapper {
+            position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+            transform-style: preserve-3d; cursor: grab;
+            backface-visibility: hidden;
+        }
+        .img-card {
+            width: 100%; height: 100%; background: rgba(255,255,255,0.03);
+            border-radius: 8px; padding: 4px;
+            box-shadow: 0 0 8px rgba(255,255,255,0.2), 0 0 16px rgba(0,160,255,0.15);
+            transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            transform: scale(1);
+        }
+        .img-card img {
+            width: 100%; height: 100%; object-fit: cover; border-radius: 6px; display: block;
+            /* 针对人像照片优化：显示偏上部分 */
+            object-position: center top; 
+            -webkit-box-reflect: below 5px linear-gradient(to bottom, transparent 75%, rgba(255,255,255,0.15));
+            transform: translateZ(0);
+        }
+        .img-wrapper.selected .img-card {
+            transform: scale(1.08) !important;
+            box-shadow: 0 0 14px rgba(255,255,255,0.7), 0 0 24px rgba(0,200,255,0.5);
+            border: 1.5px solid rgba(255,255,255,0.6);
+        }
+
+        /* 🔍 大图灯箱 */
+        .lightbox {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.95);
+            z-index: 2000; display: flex; flex-direction: column; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+        }
+        .lightbox.active { opacity: 1; pointer-events: auto; }
+        .lightbox img {
+            max-width: 85vw; max-height: 80vh; border-radius: 10px;
+            /* 竖图在灯箱中高度受限，保持比例 */
+            object-fit: contain; 
+            transform: scale(0.85); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .lightbox.active img { transform: scale(1); }
+        .close-hint { margin-top: 20px; color: rgba(255,255,255,0.4); font-size: 12px; pointer-events: none; }
+        .close-btn {
+            position: absolute; top: 20px; right: 20px; color: #fff; font-size: 28px;
+            cursor: pointer; padding: 10px; z-index: 2010;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-layer"></div>
+    <div class="music-btn" id="musicBtn"></div>
+    <audio id="bgm" src="./music/sunset.mp3" preload="auto" loop></audio>
+
+    <div class="nav-btn left" id="prevBtn">&lt;</div>
+    <div class="nav-btn right" id="nextBtn">&gt;</div>
+    <div class="hint-bar">
+		<div>· 点击音符播放 🎵 · 双击图片放大</div>
+		<div>· 上下滑动俯仰 👉 · 左右滑动旋转</div>
+	</div>
+
+    <div class="scene">
+        <div class="carousel" id="carousel">
+            <div class="img-wrapper"><div class="img-card"><img src="./album/red.png" alt="1"></div></div>
+            <div class="img-wrapper"><div class="img-card"><img src="./album/orange.png" alt="2"></div></div>
+            <div class="img-wrapper"><div class="img-card"><img src="./album/yellow.png" alt="3"></div></div>
+            <div class="img-wrapper"><div class="img-card"><img src="./album/green.png" alt="4"></div></div>
+            <div class="img-wrapper"><div class="img-card"><img src="./album/middle.png" alt="5"></div></div>
+            <div class="img-wrapper"><div class="img-card"><img src="./album/cyan.png" alt="6"></div></div>
+            <div class="img-wrapper"><div class="img-card"><img src="./album/blue.png" alt="7"></div></div>
+            <div class="img-wrapper"><div class="img-card"><img src="./album/purple.png" alt="8"></div></div>
+            <div class="img-wrapper"><div class="img-card"><img src="./album/color.png" alt="9"></div></div>
+        </div>
+    </div>
+
+    <div id="lightbox" class="lightbox">
+        <span class="close-btn">&times;</span>
+        <img id="lightbox-img" src="" alt="Full View">
+        <div class="close-hint">点击任意处或右上角关闭</div>
+    </div>
+
+    <script>
+        const carousel = document.getElementById('carousel');
+        const wrappers = document.querySelectorAll('.img-wrapper');
+        const bgm = document.getElementById('bgm');
+        const musicBtn = document.getElementById('musicBtn');
+        const lightbox = document.getElementById('lightbox');
+        const lbImg = document.getElementById('lightbox-img');
+
+        const COUNT = wrappers.length;
+        const ANGLE_STEP = 360 / COUNT;
+        let RADIUS = 0;
+
+        // 📐 动态计算半径
+        function initLayout() {
+            const w = wrappers[0].offsetWidth || 200;
+            // 👈 间隙调整为 50px，防止竖图卡片旋转时边缘重叠
+            RADIUS = Math.round((w / 2) / Math.tan(20 * Math.PI / 180) + 50);
+            wrappers.forEach((w, i) => w.style.transform = `rotateY(${i * ANGLE_STEP}deg) translateZ(${RADIUS}px)`);
+        }
+        window.addEventListener('load', () => setTimeout(initLayout, 50));
+        window.addEventListener('resize', () => setTimeout(initLayout, 100));
+
+        const CFG = {
+            yawSens: 0.35, pitchSens: 0.12, pitchLimit: 80, inertia: 0.90
+        };
+
+        let state = { yaw: 0, targetYaw: 0, velYaw: 0, pitch: 0, targetPitch: 0 };
+        let isDrag = false, isMoved = false, startX = 0, startY = 0, lastX = 0, lastY = 0, lastTime = 0;
+        let lastTapTime = 0;
+
+        carousel.addEventListener('pointerdown', e => {
+            if (lightbox.classList.contains('active')) return;
+            isDrag = true; isMoved = false;
+            startX = e.clientX; startY = e.clientY;
+            lastX = startX; lastY = startY; lastTime = performance.now();
+            state.velYaw = 0;
+            if (!e.target.closest('.img-wrapper.selected')) wrappers.forEach(w => w.classList.remove('selected'));
+        });
+
+        window.addEventListener('pointermove', e => {
+            if (!isDrag) return;
+            const dx = e.clientX - lastX;
+            const dy = e.clientY - lastY;
+            if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) isMoved = true;
+
+            state.targetYaw += dx * CFG.yawSens;
+            state.targetPitch -= dy * CFG.pitchSens;
+            state.targetPitch = Math.max(-CFG.pitchLimit, Math.min(CFG.pitchLimit, state.targetPitch));
+
+            const dt = performance.now() - lastTime;
+            if (dt > 0 && dt < 50) state.velYaw = dx / (dt / 16);
+            lastX = e.clientX; lastY = e.clientY; lastTime = performance.now();
+        });
+
+        window.addEventListener('pointerup', e => {
+            if (!isDrag) return;
+            isDrag = false;
+
+            if (!isMoved) {
+                const now = Date.now();
+                const wrapper = e.target.closest('.img-wrapper');
+                if (wrapper) {
+                    if (now - lastTapTime < 320) {
+                        openLightbox(wrapper.querySelector('img').src);
+                        lastTapTime = 0; 
+                    } else {
+                        wrappers.forEach(w => w.classList.remove('selected'));
+                        wrapper.classList.add('selected');
+                    }
+                    lastTapTime = now;
+                }
+            }
+        });
+
+        document.getElementById('prevBtn').onclick = () => snap(1);
+        document.getElementById('nextBtn').onclick = () => snap(-1);
+        function snap(step) { state.velYaw = 0; state.targetYaw -= step * ANGLE_STEP; }
+
+        function render() {
+            if (!isDrag) {
+                state.velYaw *= CFG.inertia;
+                state.targetYaw += state.velYaw;
+                if (Math.abs(state.velYaw) < 0.2) state.velYaw = 0;
+                state.yaw += (state.targetYaw - state.yaw) * 0.15;
+            } else {
+                state.yaw = state.targetYaw;
+            }
+            state.pitch += (state.targetPitch - state.pitch) * 0.4;
+            carousel.style.transform = `rotateX(${state.pitch}deg) rotateY(${state.yaw}deg)`;
+            requestAnimationFrame(render);
+        }
+        requestAnimationFrame(render);
+
+        function openLightbox(src) {
+            lbImg.src = src;
+            lightbox.classList.add('active');
+            state.velYaw = 0;
+        }
+        function closeLightbox() { lightbox.classList.remove('active'); }
+        lightbox.onclick = (e) => { if (e.target === lightbox || e.target.classList.contains('close-hint')) closeLightbox(); };
+        document.querySelector('.close-btn').onclick = closeLightbox;
+
+        musicBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (bgm.paused) {
+                bgm.play().then(() => musicBtn.classList.add('playing')).catch(()=>{});
+            } else {
+                bgm.pause(); musicBtn.classList.remove('playing');
+            }
+        });
+        bgm.addEventListener('play', () => musicBtn.classList.add('playing'));
+        bgm.addEventListener('pause', () => musicBtn.classList.remove('playing'));
+    </script>
+</body>
+</html>
